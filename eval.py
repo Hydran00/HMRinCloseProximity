@@ -8,6 +8,7 @@ Running the above will compute the Reconstruction Error for the mode as well as 
 """
 import torch
 import argparse
+import time
 from tqdm import tqdm
 from ProHMR.prohmr.configs import get_config, prohmr_config
 from models import ProHMR
@@ -68,12 +69,49 @@ evaluator = Evaluator(dataset_length=len(dataset),
                       metrics=metrics,
                       n_measure_points=args.num_measurements,)
 
+
+def get_elapsed_ms(start_time=None, start_event=None, end_event=None):
+    if device.type == 'cuda':
+        end_event.record()
+        torch.cuda.synchronize()
+        return start_event.elapsed_time(end_event)
+    return (time.perf_counter() - start_time) * 1000
+
+
+prohmr_inference_times = []
+amcs_pipeline_times = []
+amsf_pipeline_times = []
+
 # Go over the images in the dataset.
 for i, batch in enumerate(tqdm(dataloader)):
     batch = recursive_to(batch, device)
     with torch.no_grad():
+        if device.type == 'cuda':
+            prohmr_start = torch.cuda.Event(enable_timing=True)
+            prohmr_end = torch.cuda.Event(enable_timing=True)
+            torch.cuda.synchronize()
+            prohmr_start.record()
+        else:
+            prohmr_start_time = time.perf_counter()
         out = model(batch)
+        prohmr_time = get_elapsed_ms(
+            start_time=prohmr_start_time if device.type != 'cuda' else None,
+            start_event=prohmr_start if device.type == 'cuda' else None,
+            end_event=prohmr_end if device.type == 'cuda' else None,
+        )
+        prohmr_inference_times.append(prohmr_time)
     evaluator(out, batch, flow_net=model.flow, smpl=model.smpl)
+    batch_size = out['pred_keypoints_3d'].shape[0]
+    amcs_pipeline_times.append(prohmr_time + evaluator.time_am[evaluator.counter - batch_size])
+    amsf_pipeline_times.append(prohmr_time + evaluator.time_sf[evaluator.counter - batch_size])
+    avg_prohmr_time = sum(prohmr_inference_times) / len(prohmr_inference_times)
+    avg_amcs_time = sum(amcs_pipeline_times) / len(amcs_pipeline_times)
+    avg_amsf_time = sum(amsf_pipeline_times) / len(amsf_pipeline_times)
+    tqdm.write(
+        f'Iter {i + 1}: avg ProHMR inference: {avg_prohmr_time:.3f} ms | '
+        f'avg AM-CS pipeline: {avg_amcs_time:.3f} ms | '
+        f'avg AM-SF pipeline: {avg_amsf_time:.3f} ms'
+    )
     if i % args.log_freq == args.log_freq - 1:
         evaluator.log()
 evaluator.log()

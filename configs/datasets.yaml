@@ -1,6 +1,6 @@
 3DPW-TEST-OC:
     TYPE: ImageDataset
     DATASET_FILE: data/datasets/3dpw_test_oc.npz
-    IMG_DIR: /home-local/maeda/HMR/3DPW
+    IMG_DIR: /media/nardi/Crucial X9/HMRinCloseProximity/data/datasets
     KEYPOINT_LIST: [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 43]
     USE_HIPS: False

@@ -295,9 +295,9 @@ class CustomEvaluator(Evaluator):
         if hasattr(self, 'amcs_mpjpe') or hasattr(self, 'amcs_re'):
             self.timer.start()
             idx_most_uncertain_vertex = self.simulated_active_measurement(pred_vertices, pred_normals, n_measure_points)
+            idx_min_error_amcs = self.filtering(num_samples, pred_vertices, target_vertices, pred_normals, target_normals, idx_most_uncertain_vertex)
             self.timer.end()
             time_am = self.timer.elapsed_time()
-            idx_min_error_amcs = self.filtering(num_samples, pred_vertices, target_vertices, pred_normals, target_normals, idx_most_uncertain_vertex)
             amcs_mpjpe = torch.gather(torch.from_numpy(mpjpe), 1, idx_min_error_amcs[:, None].cpu())
             self.amcs_mpjpe[self.counter:self.counter+batch_size] = amcs_mpjpe.numpy().squeeze()
             
@@ -311,10 +311,10 @@ class CustomEvaluator(Evaluator):
         if hasattr(self, 'amsf_mpjpe') or hasattr(self, 'amsf_re'):
             self.timer.start()
             refined_keypoints = self.optimization(flow_net, smpl, target_vertices, output, idx_min_error_amcs, idx_most_uncertain_vertex)
-            self.timer.end()
-            time_sf = self.timer.elapsed_time()
             amsf_mpjpe, amsf_re, _, _ = eval_pose(refined_keypoints[:, self.keypoint_list],
                                                   gt_keypoints_3d[:, 0, self.keypoint_list])
+            self.timer.end()
+            time_sf = self.timer.elapsed_time()
             self.amsf_mpjpe[self.counter:self.counter+batch_size] = amsf_mpjpe.squeeze()    
             
         if hasattr(self, 'amsf_re'):
